@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.opentabletlauncher"
-    compileSdk = 28
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.opentabletlauncher"
         minSdk = 28
-        targetSdk = 28
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
