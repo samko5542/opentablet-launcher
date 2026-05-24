@@ -25,21 +25,21 @@ class UsbGadgetManager(private val shell: RootShell) {
             set -e
             G=""
             for d in /sys/kernel/config/usb_gadget/*; do
-              [ -d "$d" ] || continue
-              if ls "$d/functions" 2>/dev/null | grep -q '^hid\.'; then
-                G="$d"
+              [ -d "${'$'}d" ] || continue
+              if ls "${'$'}d/functions" 2>/dev/null | grep -q '^hid\.'; then
+                G="${'$'}d"
                 break
               fi
             done
-            [ -n "$G" ] || exit 2
-            LANG_DIR=$(ls "$G/strings" 2>/dev/null | head -n 1)
-            [ -n "$LANG_DIR" ] || LANG_DIR=0x409
-            IDV=$(cat "$G/idVendor" 2>/dev/null || true)
-            IDP=$(cat "$G/idProduct" 2>/dev/null || true)
-            MFG=$(cat "$G/strings/$LANG_DIR/manufacturer" 2>/dev/null || true)
-            PRD=$(cat "$G/strings/$LANG_DIR/product" 2>/dev/null || true)
-            SRL=$(cat "$G/strings/$LANG_DIR/serialnumber" 2>/dev/null || true)
-            printf '%s\n%s\n%s\n%s\n%s\n' "$IDV" "$IDP" "$MFG" "$PRD" "$SRL"
+            [ -n "${'$'}G" ] || exit 2
+            LANG_DIR=${'$'}(ls "${'$'}G/strings" 2>/dev/null | head -n 1)
+            [ -n "${'$'}LANG_DIR" ] || LANG_DIR=0x409
+            IDV=${'$'}(cat "${'$'}G/idVendor" 2>/dev/null || true)
+            IDP=${'$'}(cat "${'$'}G/idProduct" 2>/dev/null || true)
+            MFG=${'$'}(cat "${'$'}G/strings/${'$'}LANG_DIR/manufacturer" 2>/dev/null || true)
+            PRD=${'$'}(cat "${'$'}G/strings/${'$'}LANG_DIR/product" 2>/dev/null || true)
+            SRL=${'$'}(cat "${'$'}G/strings/${'$'}LANG_DIR/serialnumber" 2>/dev/null || true)
+            printf '%s\n%s\n%s\n%s\n%s\n' "${'$'}IDV" "${'$'}IDP" "${'$'}MFG" "${'$'}PRD" "${'$'}SRL"
         """.trimIndent()
 
         val result = shell.run(cmd)
