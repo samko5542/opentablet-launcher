@@ -2,47 +2,57 @@ package com.example.opentabletlauncher.hid
 
 import com.example.opentabletlauncher.root.RootShell
 
-class UsbGadgetManager(private val shell: RootShell) {
-    private val gadgetPath = "/sys/kernel/config/usb_gadget/opentablet"
+data class GadgetIdentity(
+    val idVendor: String,
+    val idProduct: String,
+    val manufacturer: String,
+    val product: String,
+    val serialNumber: String
+)
 
-    fun setup(): RootShell.Result {
-        val descriptorHex = HidDescriptor.descriptor.joinToString("") { "%02x".format(it) }
-        val cmd = """
-            set -e
-            mkdir -p $gadgetPath
-            echo 0x18D1 > $gadgetPath/idVendor
-            echo 0x4E12 > $gadgetPath/idProduct
-            mkdir -p $gadgetPath/strings/0x409
-            echo "OpenTablet" > $gadgetPath/strings/0x409/manufacturer
-            echo "Root Tablet" > $gadgetPath/strings/0x409/product
-            echo "OTB001" > $gadgetPath/strings/0x409/serialnumber
-            mkdir -p $gadgetPath/configs/c.1/strings/0x409
-            echo "Tablet" > $gadgetPath/configs/c.1/strings/0x409/configuration
-            mkdir -p $gadgetPath/functions/hid.usb0
-            echo 0 > $gadgetPath/functions/hid.usb0/protocol
-            echo 0 > $gadgetPath/functions/hid.usb0/subclass
-            echo 8 > $gadgetPath/functions/hid.usb0/report_length
-            xxd -r -p <<'HD' > $gadgetPath/functions/hid.usb0/report_desc
-$descriptorHex
-HD
-            ln -sf $gadgetPath/functions/hid.usb0 $gadgetPath/configs/c.1/hid.usb0
-            UDC=$(ls /sys/class/udc | head -n 1)
-            echo $UDC > $gadgetPath/UDC
-        """.trimIndent()
-        return shell.run(cmd)
+class UsbGadgetManager(private val shell: RootShell) {
+
+    fun startUsingExistingHid(): RootShell.Result {
+        return shell.run("test -w /dev/hidg0")
     }
 
-    fun teardown() {
-        shell.run("""
-            set +e
-            echo '' > $gadgetPath/UDC
-            rm -f $gadgetPath/configs/c.1/hid.usb0
-            rmdir $gadgetPath/functions/hid.usb0
-            rmdir $gadgetPath/configs/c.1/strings/0x409
-            rmdir $gadgetPath/configs/c.1
-            rmdir $gadgetPath/strings/0x409
-            rmdir $gadgetPath
-        """.trimIndent())
+    fun stopUsingExistingHid() {
+        // Intentionally no-op: app does not create/destroy gadget anymore.
+    }
+
+    fun readIdentityFromExistingGadget(): GadgetIdentity? {
+        val cmd = """
+            set -e
+            G=""
+            for d in /sys/kernel/config/usb_gadget/*; do
+              [ -d "$d" ] || continue
+              if ls "$d/functions" 2>/dev/null | grep -q '^hid\.'; then
+                G="$d"
+                break
+              fi
+            done
+            [ -n "$G" ] || exit 2
+            LANG_DIR=$(ls "$G/strings" 2>/dev/null | head -n 1)
+            [ -n "$LANG_DIR" ] || LANG_DIR=0x409
+            IDV=$(cat "$G/idVendor" 2>/dev/null || true)
+            IDP=$(cat "$G/idProduct" 2>/dev/null || true)
+            MFG=$(cat "$G/strings/$LANG_DIR/manufacturer" 2>/dev/null || true)
+            PRD=$(cat "$G/strings/$LANG_DIR/product" 2>/dev/null || true)
+            SRL=$(cat "$G/strings/$LANG_DIR/serialnumber" 2>/dev/null || true)
+            printf '%s\n%s\n%s\n%s\n%s\n' "$IDV" "$IDP" "$MFG" "$PRD" "$SRL"
+        """.trimIndent()
+
+        val result = shell.run(cmd)
+        if (result.code != 0) return null
+        val lines = result.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.size < 5) return null
+        return GadgetIdentity(
+            idVendor = lines[0],
+            idProduct = lines[1],
+            manufacturer = lines[2],
+            product = lines[3],
+            serialNumber = lines[4]
+        )
     }
 
     fun writeReport(report: ByteArray) {

@@ -1,7 +1,6 @@
 package com.example.opentabletlauncher.ui
 
 import android.os.Bundle
-import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
@@ -28,8 +27,7 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUi()
 
-        val report = capabilities.collect()
-        binding.statusText.text = report.summary()
+        refreshStatus()
 
         binding.startStopButton.setOnClickListener {
             if (running) stopTabletMode() else startTabletMode()
@@ -43,23 +41,46 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun refreshStatus() {
+        val report = capabilities.collect()
+        val identity = gadget.readIdentityFromExistingGadget()
+        binding.statusText.text = buildString {
+            appendLine(report.summary().trimEnd())
+            appendLine()
+            appendLine("Using existing HID endpoint: /dev/hidg0")
+            if (identity != null) {
+                appendLine("Use these values for OTD matching:")
+                appendLine("idVendor=${identity.idVendor}")
+                appendLine("idProduct=${identity.idProduct}")
+                appendLine("manufacturer=${identity.manufacturer}")
+                appendLine("product=${identity.product}")
+                appendLine("serialnumber=${identity.serialNumber}")
+            } else {
+                appendLine("Could not read gadget identity from /sys/kernel/config/usb_gadget.")
+            }
+        }
+    }
+
     private fun startTabletMode() {
         mapper = InputMapper(TabletConfig(binding.root.width.coerceAtLeast(1), binding.root.height.coerceAtLeast(1)))
-        val result = gadget.setup()
+        val result = gadget.startUsingExistingHid()
         running = result.code == 0
         binding.startStopButton.text = if (running) "STOP" else "START"
         binding.statusText.text = if (running) {
-            "Tablet mode active (hidg0)"
+            val identityText = gadget.readIdentityFromExistingGadget()?.let {
+                "\nidVendor=${it.idVendor}\nidProduct=${it.idProduct}\nmanufacturer=${it.manufacturer}\nproduct=${it.product}\nserialnumber=${it.serialNumber}"
+            } ?: ""
+            "Tablet mode active on existing /dev/hidg0$identityText"
         } else {
-            "Failed to start:\n${result.stderr.ifBlank { result.stdout }}"
+            "Cannot use /dev/hidg0. Ensure it already exists and is writable by root.\n${result.stderr.ifBlank { result.stdout }}"
         }
     }
 
     private fun stopTabletMode() {
         running = false
-        gadget.teardown()
+        gadget.stopUsingExistingHid()
         binding.startStopButton.text = "START"
-        binding.statusText.text = "Tablet mode stopped"
+        refreshStatus()
     }
 
     private fun hideSystemUi() {
